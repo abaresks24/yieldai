@@ -89,6 +89,15 @@ const tx = (label: string, r: TxResult): StepTx => ({
   url: r.hash ? nearblocksTx(r.hash) : "",
   failure: r.failure,
 });
+/** Poll until `done(value)` or the budget runs out; receipts on NEAR settle a block or two later. */
+async function poll<T>(fn: () => Promise<T>, done: (v: T) => boolean, tries = 10, ms = 1500): Promise<T> {
+  let v = await fn();
+  for (let i = 0; i < tries && !done(v); i++) {
+    await new Promise((res) => setTimeout(res, ms));
+    v = await fn();
+  }
+  return v;
+}
 const vaultId = () => keys().vault;
 const coordId = () => keys().coordinator;
 
@@ -224,7 +233,10 @@ export async function supply(ctx: LaunchCtx): Promise<StepResult> {
   const actions = await recentActionId();
   ctx.supplyId = actions;
   const e = await call(agent, vaultId(), "execute_action", { action_id: ctx.supplyId }, { gas: TGAS(100) });
-  const st = await view<{ status: string; note: string | null }>(vaultId(), "view_action", { action_id: ctx.supplyId });
+  const st = await poll(
+    () => view<{ status: string; note: string | null }>(vaultId(), "view_action", { action_id: ctx.supplyId! }),
+    (a) => a.status !== "Proposed" || !!e.failure,
+  );
   return {
     ok: !e.failure && st.status === "Executed", ctx,
     txs: [tx("propose_action", p), tx("execute_action", e)],
@@ -371,8 +383,11 @@ export async function reveal(ctx: LaunchCtx): Promise<StepResult> {
       return { gid, r: await call(acc, coordId(), "reveal_report", { action_id: ctx.coordId, guardian_id: gid, report_json: rep.report_json }) };
     }),
   );
-  const tally = await view<{ approvals: number; threshold_met: boolean }>(coordId(), "tally", { action_id: ctx.coordId });
   const bad = out.find((o) => o.r.failure);
+  const tally = await poll(
+    () => view<{ approvals: number; threshold_met: boolean }>(coordId(), "tally", { action_id: ctx.coordId }),
+    (t) => t.threshold_met || !!bad,
+  );
   return {
     ok: !bad && tally.threshold_met, ctx, title: "Guardians reveal",
     txs: out.map((o) => tx(`reveal_report ${o.gid}`, o.r)),
@@ -389,7 +404,11 @@ export async function execute(ctx: LaunchCtx): Promise<StepResult> {
   if (!ctx.crossId) return { ok: true, ctx, txs: [], title: "Execute", detail: "No cross-chain leg." };
   const agent = await asAgent();
   const r = await call(agent, vaultId(), "execute_action", { action_id: ctx.crossId }, { gas: TGAS(300) });
-  const st = await view<{ status: string; note: string | null }>(vaultId(), "view_action", { action_id: ctx.crossId });
+  const st = await poll(
+    () => view<{ status: string; note: string | null }>(vaultId(), "view_action", { action_id: ctx.crossId }),
+    (a) => a.status !== "Proposed" || !!r.failure,
+    14,
+  );
   // The MPC signature arrives asynchronously (yield/resume): poll the vault.
   let sig: string | null = null;
   for (let i = 0; i < 12 && !sig; i++) {
