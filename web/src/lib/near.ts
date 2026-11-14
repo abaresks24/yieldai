@@ -40,7 +40,7 @@ export const NEAR_CONFIG = {
     process.env.NEXT_PUBLIC_COORDINATOR_ID ??
     "coordinator.mandate-arthur.testnet",
   vaultId:
-    process.env.NEXT_PUBLIC_VAULT_ID ?? "demo.vaults.mandate-arthur.testnet",
+    process.env.NEXT_PUBLIC_VAULT_ID ?? "live.yieldai-dep-7k3q.testnet",
   registryId:
     process.env.NEXT_PUBLIC_REGISTRY_ID ?? "registry.mandate-arthur.testnet",
 };

@@ -18,16 +18,10 @@ import { NEAR_CONFIG } from "@/lib/near";
 
 type Network = "testnet" | "mainnet";
 
-// A single NEAR FunctionCall action, in the shape wallet-selector expects.
-export interface FunctionCallAction {
-  type: "FunctionCall";
-  params: {
-    methodName: string;
-    args: Record<string, unknown>;
-    gas: string;
-    deposit: string;
-  };
-}
+// wallet-selector v10 takes near-api-js (NAJ) actions, i.e. the objects built by
+// `transactions.functionCall(...)`, NOT the legacy {type, params} shape (which the
+// wallets reject with "Unsupported NAJ action"). Kept opaque on purpose.
+export type FunctionCallAction = unknown;
 
 // Minimal outcome we read back — the final tx hash lives at transaction.hash.
 export interface SignedTxOutcome {

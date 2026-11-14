@@ -12,9 +12,9 @@ import type {
 } from "@/components/wallet/WalletProvider";
 
 // 30 TGas — ample for a single storage write.
-const REGISTER_GAS = "30000000000000";
+const REGISTER_GAS = BigInt("30000000000000");
 // 0.01 NEAR, the contract's minimum attached deposit.
-const REGISTER_DEPOSIT = "10000000000000000000000";
+const REGISTER_DEPOSIT = BigInt("10000000000000000000000");
 
 export interface RegisterMandateArgs {
   mandate_json: string;
@@ -39,18 +39,17 @@ export async function registerMandate(
   _accountId: string,
   { mandate_json, label }: RegisterMandateArgs
 ): Promise<RegisterResult> {
+  // NAJ action (what wallet-selector v10 expects); args are JSON-encoded by near-api-js.
+  const { transactions } = await import("near-api-js");
   const outcome = await signAndSendTransaction({
     receiverId: REGISTRY_ID,
     actions: [
-      {
-        type: "FunctionCall",
-        params: {
-          methodName: "register_mandate",
-          args: { mandate_json, label },
-          gas: REGISTER_GAS,
-          deposit: REGISTER_DEPOSIT,
-        },
-      },
+      transactions.functionCall(
+        "register_mandate",
+        { mandate_json, label },
+        REGISTER_GAS as never,
+        REGISTER_DEPOSIT as never,
+      ),
     ],
   });
 
