@@ -15,6 +15,8 @@ export interface LaunchKeys {
   coordinator: string;
   vault: string;
   guardianAccounts: string[];
+  /** Optional demo user: lets the Launch flow register a mandate without an external wallet. */
+  demoUser?: { account: string; sk: string };
 }
 
 let cached: LaunchKeys | null = null;
@@ -41,6 +43,12 @@ async function account(accountId: string, sk: string): Promise<Account> {
 export const asOwner = () => account(keys().deployer.account, keys().deployer.sk);
 /** The agent: same account id but its RESTRICTED function-call key (vault methods only, 0 deposit). */
 export const asAgent = () => account(keys().deployer.account, keys().agent.sk);
+/** The demo user (server-held key), for the no-wallet path. */
+export async function asDemoUser() {
+  const u = keys().demoUser;
+  if (!u) throw new Error("demo user not configured");
+  return { id: u.account, acc: await account(u.account, u.sk) };
+}
 /** A guardian operator, signing with the guardian's own account. */
 export async function asGuardian(accountId: string) {
   const k = keys().accounts[accountId];

@@ -830,6 +830,36 @@ function LaunchPanel({ strategy }: { strategy: ProposedStrategy }) {
   const { accountId, signIn, signAndSendTransaction } = useWallet();
   const [state, setState] = useState<LaunchState>({ phase: "idle" });
 
+  // Only Rhea (NEAR) and Morpho (Ethereum) settle on testnet today.
+  const hasLive = strategy.allocations.some(
+    (a) => a.weightPct > 0 && /^(rhea|morpho)/i.test(a.label.trim()),
+  );
+
+  // No-wallet path: a server-held demo account signs register_mandate.
+  const [demoAccount, setDemoAccount] = useState<string | null>(null);
+  async function onDeployDemo() {
+    setState({ phase: "signing" });
+    try {
+      const res = await fetch("/api/launch/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mandate_json: JSON.stringify(strategy.mandate),
+          label: shortLabel(strategy.summary),
+        }),
+      });
+      const j = (await res.json()) as { ok: boolean; account?: string; hash?: string; error?: string };
+      if (!j.ok) throw new Error(j.error ?? "registration failed");
+      setDemoAccount(j.account ?? null);
+      setState({ phase: "done", hash: j.hash ?? null });
+    } catch (err) {
+      setState({
+        phase: "error",
+        message: `Could not register the mandate: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }
+
   async function onDeploy() {
     if (!accountId) return;
     setState({ phase: "signing" });
@@ -940,14 +970,28 @@ function LaunchPanel({ strategy }: { strategy: ProposedStrategy }) {
 
       {/* CTA, REAL wallet-signed on-chain registration */}
       <div className="mt-8 flex flex-col gap-3 border-t border-hairline pt-6">
-        {!accountId ? (
+        {state.phase !== "done" && !accountId ? (
           <>
-            <Button variant="primary" size="lg" className="self-start" onClick={signIn}>
-              Connect wallet to deploy
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button variant="primary" size="lg" onClick={signIn}>
+                Connect wallet to deploy
+              </Button>
+              <Button
+                variant="secondary"
+                size="lg"
+                disabled={state.phase === "signing"}
+                onClick={onDeployDemo}
+              >
+                {state.phase === "signing" ? "Registering…" : "Deploy with the demo account"}
+              </Button>
+            </div>
+            {state.phase === "error" && (
+              <p className="text-xs leading-relaxed text-danger">{state.message}</p>
+            )}
             <p className="text-xs leading-relaxed text-muted">
-              Connect a NEAR wallet to sign the mandate. Nothing is registered until you
-              explicitly sign the transaction in your wallet.
+              Connect a NEAR wallet to sign the mandate yourself. Nothing is registered until you
+              explicitly sign. Or use the shared demo account: the server signs the same
+              <span className="num"> register_mandate</span> call for you.
             </p>
           </>
         ) : state.phase === "done" ? (
@@ -958,8 +1002,8 @@ function LaunchPanel({ strategy }: { strategy: ProposedStrategy }) {
             </div>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
               Your mandate is now recorded under{" "}
-              <span className="num text-ink">{accountId}</span> on the registry
-              contract. This write is real and wallet-signed.
+              <span className="num text-ink">{demoAccount ?? accountId}</span> on the registry
+              contract. This write is real{demoAccount ? ", signed by the shared demo account" : " and wallet-signed"}.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
               {state.hash && (
@@ -980,13 +1024,21 @@ function LaunchPanel({ strategy }: { strategy: ProposedStrategy }) {
                 View in Portfolio →
               </Link>
             </div>
-            <LiveRun
+            {!hasLive && (
+              <p className="mt-4 rounded-lg border border-warn/40 bg-warn/5 p-4 text-xs leading-relaxed text-muted">
+                None of the venues in this strategy settles on testnet today (only Rhea on NEAR and
+                Morpho on Ethereum do), so there is nothing to execute live. The mandate above is real;
+                to see the full committee and cross-chain run, propose a strategy that includes
+                Morpho or Rhea.
+              </p>
+            )}
+            {hasLive && <LiveRun
               autoStart
               mandate={strategy.mandate}
               weights={Object.fromEntries(
                 strategy.allocations.map((a) => [a.label, a.weightPct]),
               )}
-            />
+            />}
           </div>
         ) : (
           <>
