@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --conditions=react-server --import tsx --test src/lib/launch/launch.test.ts"
   },
   "dependencies": {
     "@near-wallet-selector/core": "^10.1.4",

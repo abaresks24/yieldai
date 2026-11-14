@@ -411,7 +411,7 @@ export async function execute(ctx: LaunchCtx): Promise<StepResult> {
   );
   // The MPC signature arrives asynchronously (yield/resume): poll the vault.
   let sig: string | null = null;
-  for (let i = 0; i < 12 && !sig; i++) {
+  for (let i = 0; i < 12 && !sig && st.status === "Executed"; i++) {
     sig = await view<string | null>(vaultId(), "view_signature", { action_id: ctx.crossId });
     if (!sig) await new Promise((res) => setTimeout(res, 2000));
   }
